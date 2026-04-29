@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SU 提示词构建器 · PROMPT STRUCTURE DECK</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0e0e0e;
+    --panel: #161616;
+    --card: #1c1c1c;
+    --border: #2a2a2a;
+    --accent: #e63946;
+    --accent2: #ff6b6b;
+    --text: #e8e8e8;
+    --muted: #666;
+    --label: #999;
+    --green: #2ec27e;
+    --blue: #4dabf7;
+    --yellow: #ffd43b;
+    --tag-bg: #252525;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 20px; }
+  .brand { font-size: 13px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  .title { font-size: 13px; font-weight: 600; letter-spacing: 3px; color: var(--text); text-transform: uppercase; }
+  .topbar-right { display: flex; gap: 10px; overflow-x: auto; padding: 2px 0; }
+
+  .preset-btn {
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--label);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all .2s;
+    letter-spacing: 1px;
+  }
+  .preset-btn:hover, .preset-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(230,57,70,.08);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    display: grid;
+    grid-template-columns: 480px 1fr;
+    gap: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── LEFT: JSON PREVIEW ── */
+  .left-panel {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 53px);
+    position: sticky;
+    top: 53px;
+  }
+  .panel-header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .panel-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .panel-title span { color: var(--accent); }
+
+  .copy-btn {
+    padding: 7px 18px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    transition: all .2s;
+    white-space: nowrap;
+  }
+  .copy-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+  .copy-btn.copied { background: var(--green); }
+
+  .json-preview {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    color: #ccc;
+    white-space: pre;
+  }
+  .json-preview::-webkit-scrollbar { width: 4px; }
+  .json-preview::-webkit-scrollbar-track { background: transparent; }
+  .json-preview::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  .jk { color: #74c0fc; }   /* key */
+  .jv { color: #a9dc76; }   /* string value */
+  .jp { color: #666; }      /* punctuation */
+
+  /* ── RIGHT: LAYERS ── */
+  .right-panel {
+    overflow-y: auto;
+    height: calc(100vh - 53px);
+    padding: 0;
+  }
+  .right-panel::-webkit-scrollbar { width: 4px; }
+  .right-panel::-webkit-scrollbar-track { background: transparent; }
+  .right-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  /* ── LAYER CARD ── */
+  .layer-card {
+    border-bottom: 1px solid var(--border);
+    padding: 28px 32px 32px;
+  }
+  .layer-meta {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .layer-name {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .layer-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 24px;
+    max-width: 600px;
+  }
+
+  /* ── FIELDS ── */
+  .fields { display: flex; flex-direction: column; gap: 16px; }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    align-items: start;
+    gap: 16px;
+  }
+  .field-label {
+    font-size: 12px;
+    color: var(--label);
+    padding-top: 10px;
+    letter-spacing: 0.5px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .field-label .key-name {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: monospace;
+    letter-spacing: 1px;
+  }
+
+  .field-control { display: flex; flex-direction: column; gap: 8px; }
+
+  /* Select */
+  select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 14px;
+    font-size: 13px;
+    border-radius: 4px;
+    width: 100%;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    transition: border-color .2s;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
+
+  /* Text input */
+  input[type="text"] {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 14px;
+    font-size: 13px;
+    border-radius: 4px;
+    width: 100%;
+    transition: border-color .2s;
+  }
+  input[type="text"]:focus { outline: none; border-color: var(--accent); }
+  input[type="text"]::placeholder { color: var(--muted); }
+
+  /* Tags */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tag {
+    padding: 5px 14px;
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    color: var(--label);
+    font-size: 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+  }
+  .tag:hover { border-color: #444; color: var(--text); }
+  .tag.selected {
+    background: rgba(230,57,70,.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .tag.multi-selected {
+    background: rgba(77,171,247,.15);
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  /* Style Group */
+  .style-group {
+    margin-bottom: 14px;
+  }
+  .style-group:last-child { margin-bottom: 0; }
+  .group-title {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-left: 2px;
+    border-left: 2px solid var(--accent);
+    padding-left: 8px;
+  }
+
+  /* Helper text */
+  .field-hint {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* ── BOTTOM BAR ── */
+  .bottombar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 28px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .nav-btns { display: flex; gap: 12px; align-items: center; }
+  .nav-btn {
+    padding: 6px 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--label);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all .2s;
+  }
+  .nav-btn:hover { border-color: #555; color: var(--text); }
+
+  .page-indicator {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    border: 1px solid var(--border);
+    padding: 6px 16px;
+    border-radius: 3px;
+  }
+
+  /* ── SCROLLBAR dots ── */
+  .dots { display: flex; gap: 6px; align-items: center; }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .dot.active { background: var(--accent); }
+
+  /* ── COPY TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--green);
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all .3s;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .left-panel { height: auto; position: relative; top: 0; border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="brand">SU Prompt Builder</span>
+    <span class="title">PROMPT STRUCTURE DECK</span>
+  </div>
+  <div class="topbar-right">
+    <button class="preset-btn active" onclick="loadPreset('modern')">现代</button>
+    <button class="preset-btn" onclick="loadPreset('nordic')">北欧</button>
+    <button class="preset-btn" onclick="loadPreset('luxury')">轻奢</button>
+    <button class="preset-btn" onclick="loadPreset('industrial')">工业</button>
+    <button class="preset-btn" onclick="loadPreset('xz')">新中式</button>
+    <button class="preset-btn" onclick="loadPreset('french')">法式</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT: JSON PREVIEW -->
+  <div class="left-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-label">PROMPT CHUNK</div>
+        <div class="panel-title">完整提示词 <span>JSON</span></div>
+      </div>
+      <button class="copy-btn" id="copyBtn" onclick="copyJSON()">完整复制 / 当前页面</button>
+    </div>
+    <div class="json-preview" id="jsonPreview"></div>
+  </div>
+
+  <!-- RIGHT: LAYERS -->
+  <div class="right-panel" id="rightPanel">
+
+    <!-- LAYER 01: 项目信息 -->
+    <div class="layer-card" id="layer-0">
+      <div class="layer-meta">LAYER 01</div>
+      <div class="layer-name">项目层</div>
+      <div class="layer-desc">定义本次渲染任务的基本信息，包括项目名称和所属分类。这是整个提示词的身份标签。</div>
+      <div class="fields">
+
+        <div class="field-row">
+          <div class="field-label">
+            项目名称
+            <span class="key-name">"项目名称"</span>
+          </div>
+          <div class="field-control">
+            <input type="text" id="f_project_name" placeholder="e.g. SU截图转写实摄影 - 现代客厅定制版"
+              oninput="updateJSON()" />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            空间类型
+            <span class="key-name">scene_type</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_scene_type">
+              <span class="tag" data-val="室内空间" onclick="selectTag(this,'scene_type')">室内空间</span>
+              <span class="tag" data-val="景观" onclick="selectTag(this,'scene_type')">景观</span>
+              <span class="tag" data-val="建筑外观" onclick="selectTag(this,'scene_type')">建筑外观</span>
+              <span class="tag" data-val="商业空间" onclick="selectTag(this,'scene_type')">商业空间</span>
+              <span class="tag" data-val="办公空间" onclick="selectTag(this,'scene_type')">办公空间</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 外景选择 (conditional field) -->
+        <div class="field-row" id="exterior_row" style="display: none;">
+          <div class="field-label">
+            外景类型
+            <span class="key-name">exterior</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_exterior">
+              <span class="tag" data-val="城市景观" onclick="selectTag(this,'exterior')">🏙 城市景观</span>
+              <span class="tag" data-val="城市天际线" onclick="selectTag(this,'exterior')">🌆 城市天际线</span>
+              <span class="tag" data-val="小区园林" onclick="selectTag(this,'exterior')">🌳 小区园林</span>
+              <span class="tag" data-val="小区树林" onclick="selectTag(this,'exterior')">🌲 小区树林</span>
+              <span class="tag" data-val="海景" onclick="selectTag(this,'exterior')">🌊 海景</span>
+              <span class="tag" data-val="山景" onclick="selectTag(this,'exterior')">⛰ 山景</span>
+              <span class="tag" data-val="江景" onclick="selectTag(this,'exterior')">🌉 江景</span>
+              <span class="tag" data-val="公园" onclick="selectTag(this,'exterior')">🏞 公园</span>
+              <span class="tag" data-val="街道" onclick="selectTag(this,'exterior')">🛣 街道</span>
+              <span class="tag" data-val="无外景" onclick="selectTag(this,'exterior')">⭕ 无外景</span>
+            </div>
+            <div class="field-hint">可选，不选择则无外景描述</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- LAYER 02: 核心约束 -->
+    <div class="layer-card" id="layer-1">
+      <div class="layer-meta">LAYER 02</div>
+      <div class="layer-name">约束层</div>
+      <div class="layer-desc">控制 AI 转换时的底线规则：几何是否能变形、物体是否能替换、材质转换逻辑以及图像比例。约束越严，结果越可控。</div>
+      <div class="fields">
+
+        <div class="field-row">
+          <div class="field-label">
+            几何保真度
+            <span class="key-name">"几何保真度"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_geo">
+              <span class="tag" data-val="严格保持原始 su 场景结构、物体位置和几何形状，严禁改变空间布局。" onclick="selectTag(this,'geo')">🔒 严格保持</span>
+              <span class="tag" data-val="基本保持几何结构，允许细节优化和局部调整。" onclick="selectTag(this,'geo')">📐 基本保持</span>
+              <span class="tag" data-val="保持整体空间感，允许家具位置微调以优化构图。" onclick="selectTag(this,'geo')">🎨 构图优化</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            物体完整性
+            <span class="key-name">"物体完整性"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_obj">
+              <span class="tag" data-val="保持所有家具、灯具和装饰品的原始样式与比例。" onclick="selectTag(this,'obj')">✅ 全部保留</span>
+              <span class="tag" data-val="保留主要家具结构，允许增加软装配饰。" onclick="selectTag(this,'obj')">➕ 允许增配</span>
+              <span class="tag" data-val="保留空间框架，家具可根据风格自由升级替换。" onclick="selectTag(this,'obj')">🔄 可替换</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            转换逻辑
+            <span class="key-name">"转换逻辑"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_convert">
+              <span class="tag" data-val="将基础 su 模型面转换为高精度、符合物理规律的真实材质（PBR）。" onclick="selectTag(this,'convert')">⚡ PBR 物理材质</span>
+              <span class="tag" data-val="将 su 模型转换为写实渲染，注重光影和材质质感。" onclick="selectTag(this,'convert')">🌟 写实渲染</span>
+              <span class="tag" data-val="转换为高精度电影级写实画面，全面升级材质细节。" onclick="selectTag(this,'convert')">🎬 电影级</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            图像比例
+            <span class="key-name">"图像比例"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_ratio">
+              <span class="tag" data-val="保持和原图相同的比例。" onclick="selectTag(this,'ratio')">🖼 保持原比例</span>
+              <span class="tag" data-val="16:9 宽幅横构图，适合效果图展示。" onclick="selectTag(this,'ratio')">📺 16:9</span>
+              <span class="tag" data-val="4:3 标准构图。" onclick="selectTag(this,'ratio')">📷 4:3</span>
+              <span class="tag" data-val="1:1 方形构图。" onclick="selectTag(this,'ratio')">⬛ 1:1</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- LAYER 03: 场景与光效 -->
+    <div class="layer-card" id="layer-2">
+      <div class="layer-meta">LAYER 03</div>
+      <div class="layer-name">场景层</div>
+      <div class="layer-desc">定义空间的设计语言、地域文化背景和时间维度。时间决定自然光角度，地点影响光线质感，风格塑造整体氛围。</div>
+      <div class="fields">
+
+        <div class="field-row">
+          <div class="field-label">
+            设计风格
+            <span class="key-name">"设计风格"</span>
+          </div>
+          <div class="field-control">
+            <!-- 中式 -->
+            <div class="style-group">
+              <div class="group-title">中式</div>
+              <div class="tags" id="tags_style_zhongshi">
+                <span class="tag" data-val="新中式室内设计" onclick="selectTag(this,'style')">新中式</span>
+                <span class="tag" data-val="中式古典室内设计" onclick="selectTag(this,'style')">中式</span>
+              </div>
+            </div>
+            <!-- 欧式 -->
+            <div class="style-group">
+              <div class="group-title">欧式</div>
+              <div class="tags" id="tags_style_oushi">
+                <span class="tag" data-val="法式古典室内设计" onclick="selectTag(this,'style')">法式</span>
+                <span class="tag" data-val="欧式古典室内设计" onclick="selectTag(this,'style')">欧式</span>
+                <span class="tag" data-val="简欧室内设计" onclick="selectTag(this,'style')">简欧</span>
+                <span class="tag" data-val="意式极简室内设计" onclick="selectTag(this,'style')">意式</span>
+                <span class="tag" data-val="新古典室内设计" onclick="selectTag(this,'style')">新古典</span>
+                <span class="tag" data-val="欧式古典宫廷室内设计" onclick="selectTag(this,'style')">欧式古典</span>
+              </div>
+            </div>
+            <!-- 现代 -->
+            <div class="style-group">
+              <div class="group-title">现代</div>
+              <div class="tags" id="tags_style_xiandai">
+                <span class="tag" data-val="现代室内设计" onclick="selectTag(this,'style')">现代</span>
+                <span class="tag" data-val="轻奢现代室内设计" onclick="selectTag(this,'style')">轻奢风</span>
+                <span class="tag" data-val="高级灰现代室内设计" onclick="selectTag(this,'style')">高级灰</span>
+                <span class="tag" data-val="后现代室内设计" onclick="selectTag(this,'style')">后现代</span>
+                <span class="tag" data-val="孟菲斯风室内设计" onclick="selectTag(this,'style')">孟菲斯风</span>
+              </div>
+            </div>
+            <!-- 北欧/日系 -->
+            <div class="style-group">
+              <div class="group-title">北欧 / 日系</div>
+              <div class="tags" id="tags_style_beio">
+                <span class="tag" data-val="北欧极简室内设计" onclick="selectTag(this,'style')">北欧</span>
+                <span class="tag" data-val="奶油风室内设计" onclick="selectTag(this,'style')">奶油风</span>
+                <span class="tag" data-val="侘寂风室内设计（Wabi-Sabi）" onclick="selectTag(this,'style')">侘寂</span>
+                <span class="tag" data-val="日式室内设计" onclick="selectTag(this,'style')">日韩</span>
+              </div>
+            </div>
+            <!-- 复古 -->
+            <div class="style-group">
+              <div class="group-title">复古</div>
+              <div class="tags" id="tags_style_fugu">
+                <span class="tag" data-val="中古风室内设计（Mid-Century Modern）" onclick="selectTag(this,'style')">中古风</span>
+                <span class="tag" data-val="民国风室内设计" onclick="selectTag(this,'style')">民国风</span>
+                <span class="tag" data-val="战后现代风格室内设计（Post-War）" onclick="selectTag(this,'style')">战后风</span>
+                <span class="tag" data-val="美式复古室内设计" onclick="selectTag(this,'style')">美式</span>
+              </div>
+            </div>
+            <!-- 地域 -->
+            <div class="style-group">
+              <div class="group-title">地域</div>
+              <div class="tags" id="tags_style_diyu">
+                <span class="tag" data-val="东南亚室内设计" onclick="selectTag(this,'style')">东南亚</span>
+                <span class="tag" data-val="地中海室内设计" onclick="selectTag(this,'style')">地中海</span>
+              </div>
+            </div>
+            <!-- 特殊 -->
+            <div class="style-group">
+              <div class="group-title">特殊</div>
+              <div class="tags" id="tags_style_teshu">
+                <span class="tag" data-val="工业风室内设计" onclick="selectTag(this,'style')">工业风</span>
+                <span class="tag" data-val="暗黑风室内设计" onclick="selectTag(this,'style')">暗黑风</span>
+                <span class="tag" data-val="原木风室内设计" onclick="selectTag(this,'style')">原木风</span>
+                <span class="tag" data-val="波西米亚风室内设计" onclick="selectTag(this,'style')">波西米亚</span>
+                <span class="tag" data-val="自定义室内设计风格" onclick="selectTag(this,'style')">其它</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            地点
+            <span class="key-name">"地点"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_location">
+              <span class="tag" data-val="中国重庆" onclick="selectTag(this,'location')">重庆</span>
+              <span class="tag" data-val="中国上海" onclick="selectTag(this,'location')">上海</span>
+              <span class="tag" data-val="中国北京" onclick="selectTag(this,'location')">北京</span>
+              <span class="tag" data-val="中国成都" onclick="selectTag(this,'location')">成都</span>
+              <span class="tag" data-val="中国杭州" onclick="selectTag(this,'location')">杭州</span>
+              <span class="tag" data-val="日本东京" onclick="selectTag(this,'location')">东京</span>
+              <span class="tag" data-val="北欧斯堪的纳维亚" onclick="selectTag(this,'location')">北欧</span>
+              <span class="tag" data-val="地中海沿岸" onclick="selectTag(this,'location')">地中海</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            时间
+            <span class="key-name">"时间"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_time">
+              <span class="tag" data-val="清晨6点" onclick="selectTag(this,'time')">清晨 6:00</span>
+              <span class="tag" data-val="早上8点" onclick="selectTag(this,'time')">早上 8:00</span>
+              <span class="tag" data-val="上午10点" onclick="selectTag(this,'time')">上午 10:00</span>
+              <span class="tag" data-val="正午12点" onclick="selectTag(this,'time')">正午 12:00</span>
+              <span class="tag" data-val="下午3点" onclick="selectTag(this,'time')">下午 3:00</span>
+              <span class="tag" data-val="黄金时刻日落前一小时" onclick="selectTag(this,'time')">黄金时刻</span>
+              <span class="tag" data-val="傍晚18点" onclick="selectTag(this,'time')">傍晚 18:00</span>
+              <span class="tag" data-val="夜晚21点" onclick="selectTag(this,'time')">夜晚 21:00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            环境光
+            <span class="key-name">"环境光"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_envlight">
+              <span class="tag" data-val="远处外景进入的柔和自然天光，光线细腻有层次。山城特有的雾感天光" onclick="selectTag(this,'envlight')">☁ 雾感天光（重庆）</span>
+              <span class="tag" data-val="明亮清透的晴天直射阳光，形成强烈的光影对比。" onclick="selectTag(this,'envlight')">☀ 晴天直射光</span>
+              <span class="tag" data-val="柔和漫射的阴天散射光，无明显阴影，细节均匀。" onclick="selectTag(this,'envlight')">🌥 阴天漫射光</span>
+              <span class="tag" data-val="黄金时刻暖色调斜射阳光，长影，浓郁氛围感。" onclick="selectTag(this,'envlight')">🌅 黄金时刻</span>
+              <span class="tag" data-val="蓝调时刻（Blue Hour）柔和蓝紫色天光，色温约4000-5000K，室内外冷暖光线交融，形成独特的静谧氛围。" onclick="selectTag(this,'envlight')">🌆 蓝调时刻</span>
+              <span class="tag" data-val="夜晚纯人工照明，无自然光介入。" onclick="selectTag(this,'envlight')">🌙 纯人工夜景</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            室内光
+            <span class="key-name">"室内光"</span>
+          </div>
+          <div class="field-control">
+            <!-- 体积光开关 -->
+            <div class="style-group">
+              <div class="group-title">氛围效果</div>
+              <div class="tags" id="tags_volumetric">
+                <span class="tag" data-val="volumetric_on" onclick="toggleVolumetric(this)">✨ 体积光（丁达尔效应）</span>
+              </div>
+            </div>
+            <!-- 灯具分类 -->
+            <div class="style-group">
+              <div class="group-title">天花照明</div>
+              <div class="tags" id="tags_lights_ceiling" data-multi="true">
+                <span class="tag" data-val="天花灯带" onclick="selectMultiTag(this,'lights')">💫 天花灯带</span>
+                <span class="tag" data-val="天花射灯" onclick="selectMultiTag(this,'lights')">🔦 天花射灯</span>
+                <span class="tag" data-val="天花吊灯" onclick="selectMultiTag(this,'lights')">💡 天花吊灯</span>
+                <span class="tag" data-val="磁吸轨道灯" onclick="selectMultiTag(this,'lights')">🛤 磁吸轨道灯</span>
+              </div>
+            </div>
+            <div class="style-group">
+              <div class="group-title">墙面照明</div>
+              <div class="tags" id="tags_lights_wall" data-multi="true">
+                <span class="tag" data-val="墙面壁灯" onclick="selectMultiTag(this,'lights')">🕯 墙面壁灯</span>
+                <span class="tag" data-val="墙面洗墙灯" onclick="selectMultiTag(this,'lights')">🌊 墙面洗墙灯</span>
+                <span class="tag" data-val="窗帘盒灯带" onclick="selectMultiTag(this,'lights')">🪟 窗帘盒灯带</span>
+              </div>
+            </div>
+            <div class="style-group">
+              <div class="group-title">柜体照明</div>
+              <div class="tags" id="tags_lights_cabinet" data-multi="true">
+                <span class="tag" data-val="柜体灯带朝上" onclick="selectMultiTag(this,'lights')">⬆️ 柜体灯带朝上</span>
+                <span class="tag" data-val="柜体灯带朝下" onclick="selectMultiTag(this,'lights')">⬇️ 柜体灯带朝下</span>
+                <span class="tag" data-val="开放格层板灯" onclick="selectMultiTag(this,'lights')">📦 开放格层板灯</span>
+              </div>
+            </div>
+            <div class="style-group">
+              <div class="group-title">局部照明</div>
+              <div class="tags" id="tags_lights_local" data-multi="true">
+                <span class="tag" data-val="落地灯" onclick="selectMultiTag(this,'lights')">🛋️ 落地灯</span>
+                <span class="tag" data-val="台灯" onclick="selectMultiTag(this,'lights')">📖 台灯</span>
+                <span class="tag" data-val="柜底灯带" onclick="selectMultiTag(this,'lights')">✨ 柜底灯带</span>
+                <span class="tag" data-val="踢脚线灯带" onclick="selectMultiTag(this,'lights')">👟 踢脚线灯带</span>
+              </div>
+            </div>
+            <div class="style-group">
+              <div class="group-title">快捷预设</div>
+              <div class="tags" id="tags_light_preset">
+                <span class="tag" data-val="全部开启" onclick="selectLightPreset('all')">🔆 全部开启</span>
+                <span class="tag" data-val="仅自然光" onclick="selectLightPreset('natural')">☀️ 仅自然光</span>
+                <span class="tag" data-val="仅氛围灯" onclick="selectLightPreset('ambient')">🌙 仅氛围灯</span>
+                <span class="tag" data-val="仅功能灯" onclick="selectLightPreset('functional')">🔧 仅功能灯</span>
+                <span class="tag" data-val="全部关闭" onclick="selectLightPreset('off')">⭕ 全部关闭</span>
+              </div>
+            </div>
+            <div class="field-hint">选择具体灯具类型，可自由组合。体积光可单独开关。</div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            光影品质
+            <span class="key-name">"光影品质"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_lightqual">
+              <span class="tag" data-val="电影级布光，柔和漫反射，真实阴影层次，高动态光影对比。" onclick="selectTag(this,'lightqual')">🎬 电影级</span>
+              <span class="tag" data-val="建筑效果图标准布光，清晰真实，专业表达。" onclick="selectTag(this,'lightqual')">🏛 效果图标准</span>
+              <span class="tag" data-val="商业摄影布光，高对比，强调产品质感。" onclick="selectTag(this,'lightqual')">📸 商业摄影</span>
+              <span class="tag" data-val="自然光为主，最少人工干预，追求真实感。" onclick="selectTag(this,'lightqual')">🌿 自然纪实</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- LAYER 04: 摄影层 -->
+    <div class="layer-card" id="layer-3">
+      <div class="layer-meta">LAYER 04</div>
+      <div class="layer-name">摄影层</div>
+      <div class="layer-desc">摄影层是在真实拍摄逻辑上，不只是写参数。像 1s 快门，会和前置的人物虚形形成呼应。相机型号影响成像风格，光圈控制景深与通透感。</div>
+      <div class="fields">
+
+        <div class="field-row">
+          <div class="field-label">
+            相机型号
+            <span class="key-name">"相机型号"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_camera">
+              <span class="tag" data-val="尼康 Z9（Nikon Z9）" onclick="selectTag(this,'camera')">Nikon Z9</span>
+              <span class="tag" data-val="索尼 A7R V（Sony A7RV）" onclick="selectTag(this,'camera')">Sony A7RV</span>
+              <span class="tag" data-val="哈苏 X2D（Hasselblad X2D）" onclick="selectTag(this,'camera')">Hasselblad X2D</span>
+              <span class="tag" data-val="徕卡 M11（Leica M11）" onclick="selectTag(this,'camera')">Leica M11</span>
+              <span class="tag" data-val="佳能 EOS R5 C（Canon EOS R5C）" onclick="selectTag(this,'camera')">Canon R5C</span>
+              <span class="tag" data-val="富士 GFX 100S II（Fujifilm GFX 100S II）" onclick="selectTag(this,'camera')">Fuji GFX 100S</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            光圈
+            <span class="key-name">"光圈"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_aperture">
+              <span class="tag" data-val="f/1.4" onclick="selectTag(this,'aperture')">f/1.4 大光圈虚化</span>
+              <span class="tag" data-val="f/2.8" onclick="selectTag(this,'aperture')">f/2.8 适度虚化</span>
+              <span class="tag" data-val="f/5.6" onclick="selectTag(this,'aperture')">f/5.6 均衡</span>
+              <span class="tag" data-val="f/8" onclick="selectTag(this,'aperture')">f/8 全域清晰</span>
+              <span class="tag" data-val="f/11" onclick="selectTag(this,'aperture')">f/11 超景深</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            快门速度
+            <span class="key-name">"快门"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_shutter">
+              <span class="tag" data-val="1/1000s" onclick="selectTag(this,'shutter')">1/1000s 极速</span>
+              <span class="tag" data-val="1/250s" onclick="selectTag(this,'shutter')">1/250s 常规</span>
+              <span class="tag" data-val="1/60s" onclick="selectTag(this,'shutter')">1/60s 低速</span>
+              <span class="tag" data-val="1s" onclick="selectTag(this,'shutter')">1s 慢门</span>
+              <span class="tag" data-val="5s" onclick="selectTag(this,'shutter')">5s 长曝光</span>
+              <span class="tag" data-val="30s" onclick="selectTag(this,'shutter')">30s 星轨级</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            拍摄技术
+            <span class="key-name">"拍摄技术"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_tech" data-multi="true">
+              <span class="tag" data-val="高动态范围（HDR）拍摄，包围曝光，确保暗部不失真、亮部不过曝。" onclick="selectMultiTag(this,'tech')">HDR 包围曝光</span>
+              <span class="tag" data-val="移轴镜头拍摄，校正透视畸变，保证垂直线条平行。" onclick="selectMultiTag(this,'tech')">移轴矫正</span>
+              <span class="tag" data-val="三脚架固定长曝光，提升室内暗光细节。" onclick="selectMultiTag(this,'tech')">三脚架长曝</span>
+              <span class="tag" data-val="多张合成全景拼接，超宽幅室内视角。" onclick="selectMultiTag(this,'tech')">全景拼接</span>
+            </div>
+            <div class="field-hint">可多选</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- LAYER 05: 成片层 -->
+    <div class="layer-card" id="layer-4">
+      <div class="layer-meta">LAYER 05</div>
+      <div class="layer-name">成片层</div>
+      <div class="layer-desc">成片层负责收束风格，把质感上限拉高。这里要像最后定调，而不是再重新的信息。分辨率决定输出规格，画面表现是最终调色方向。</div>
+      <div class="fields">
+
+        <div class="field-row">
+          <div class="field-label">
+            分辨率
+            <span class="key-name">"分辨率"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_res">
+              <span class="tag" data-val="超高分辨率（8K）" onclick="selectTag(this,'res')">8K 超高分辨率</span>
+              <span class="tag" data-val="超高分辨率（4K）" onclick="selectTag(this,'res')">4K 高分辨率</span>
+              <span class="tag" data-val="高分辨率（2K）" onclick="selectTag(this,'res')">2K 标准高清</span>
+              <span class="tag" data-val="高分辨率（1080P）" onclick="selectTag(this,'res')">1080P</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">
+            画面表现
+            <span class="key-name">"画面表现"</span>
+          </div>
+          <div class="field-control">
+            <div class="tags" id="tags_render">
+              <span class="tag" data-val="写实室内摄影，质感通透，细节丰富，电影级后期调色。" onclick="selectTag(this,'render')">🎬 电影级写实调色</span>
+              <span class="tag" data-val="北欧白净风格，高亮度，低饱和，纯净通透。" onclick="selectTag(this,'render')">⬜ 北欧白净</span>
+              <span class="tag" data-val="暖调奶油色系，柔和质感，温馨氛围。" onclick="selectTag(this,'render')">🧡 奶油暖调</span>
+              <span class="tag" data-val="高对比强饱和，杂志级商业效果图风格。" onclick="selectTag(this,'render')">📰 杂志商业风</span>
+              <span class="tag" data-val="低饱和灰调，高级感，当代艺术调色。" onclick="selectTag(this,'render')">🩶 低饱和高级灰</span>
+              <span class="tag" data-val="日系胶片感，轻微颗粒，柔和色调，追求真实感。" onclick="selectTag(this,'render')">🎞 日系胶片</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottombar">
+  <div class="nav-btns">
+    <button class="nav-btn" onclick="scrollLayer(-1)">← 上一层</button>
+    <div class="dots" id="dotsNav">
+      <div class="dot active" onclick="scrollToLayer(0)"></div>
+      <div class="dot" onclick="scrollToLayer(1)"></div>
+      <div class="dot" onclick="scrollToLayer(2)"></div>
+      <div class="dot" onclick="scrollToLayer(3)"></div>
+      <div class="dot" onclick="scrollToLayer(4)"></div>
+    </div>
+    <button class="nav-btn" onclick="scrollLayer(1)">下一层 →</button>
+  </div>
+  <div style="color: var(--muted); font-size: 12px; letter-spacing: 1px;">SU Prompt Builder · 方向键切层</div>
+  <div class="page-indicator" id="pageIndicator">01 / 05</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">✓ 已复制到剪贴板</div>
+
+<script>
+// ── DATA ──
+const data = {
+  project_name: 'SU截图转写实摄影 - 现代客厅定制版',
+  scene_type: '室内空间',
+  exterior: '',  // 外景类型，可为空
+  geo: '严格保持原始 su 场景结构、物体位置和几何形状，严禁改变空间布局。',
+  obj: '保持所有家具、灯具和装饰品的原始样式与比例。',
+  convert: '将基础 su 模型面转换为高精度、符合物理规律的真实材质（PBR）。',
+  ratio: '保持和原图相同的比例。',
+  style: '现代室内设计',
+  location: '中国重庆',
+  time: '早上8点',
+  envlight: '远处外景进入的柔和自然天光，光线细腻有层次。山城特有的雾感天光',
+  volumetric: false,
+  lights: [],  // 多选灯具数组
+  lightqual: '电影级布光，柔和漫反射，真实阴影层次，高动态光影对比。',
+  camera: '尼康 Z9（Nikon Z9）',
+  aperture: 'f/8',
+  shutter: '1s',
+  tech: ['高动态范围（HDR）拍摄，包围曝光，确保暗部不失真、亮部不过曝。'],
+  res: '超高分辨率（8K）',
+  render: '写实室内摄影，质感通透，细节丰富，电影级后期调色。'
+};
+
+// Light presets by space type
+const lightPresets = {
+  all: ['天花灯带', '天花射灯', '天花吊灯', '墙面壁灯', '墙面洗墙灯', '窗帘盒灯带', '柜体灯带朝上', '柜体灯带朝下', '开放格层板灯', '落地灯', '台灯', '柜底灯带', '踢脚线灯带'],
+  natural: [],  // 仅自然光 - 无人工照明
+  ambient: ['天花灯带', '墙面洗墙灯', '落地灯', '台灯'],
+  functional: ['天花射灯', '天花吊灯', '墙面壁灯'],
+  off: []
+};
+
+// All style options for reference
+const allStyles = {
+  // 中式
+  '新中式室内设计': '新中式',
+  '中式古典室内设计': '中式',
+  // 欧式
+  '法式古典室内设计': '法式',
+  '欧式古典室内设计': '欧式',
+  '简欧室内设计': '简欧',
+  '意式极简室内设计': '意式',
+  '新古典室内设计': '新古典',
+  '欧式古典宫廷室内设计': '欧式古典',
+  // 现代
+  '现代室内设计': '现代',
+  '轻奢现代室内设计': '轻奢风',
+  '高级灰现代室内设计': '高级灰',
+  '后现代室内设计': '后现代',
+  '孟菲斯风室内设计': '孟菲斯风',
+  // 北欧/日系
+  '北欧极简室内设计': '北欧',
+  '奶油风室内设计': '奶油风',
+  '侘寂风室内设计（Wabi-Sabi）': '侘寂',
+  '日式室内设计': '日韩',
+  // 复古
+  '中古风室内设计（Mid-Century Modern）': '中古风',
+  '民国风室内设计': '民国风',
+  '战后现代风格室内设计（Post-War）': '战后风',
+  '美式复古室内设计': '美式',
+  // 地域
+  '东南亚室内设计': '东南亚',
+  '地中海室内设计': '地中海',
+  // 特殊
+  '工业风室内设计': '工业风',
+  '暗黑风室内设计': '暗黑风',
+  '原木风室内设计': '原木风',
+  '波西米亚风室内设计': '波西米亚',
+  '自定义室内设计风格': '其它'
+};
+
+// ── PRESETS ──
+const presets = {
+  modern: {
+    project_name: 'SU截图转写实摄影 - 现代客厅定制版',
+    scene_type: '室内空间',
+    geo: '严格保持原始 su 场景结构、物体位置和几何形状，严禁改变空间布局。',
+    obj: '保持所有家具、灯具和装饰品的原始样式与比例。',
+    convert: '将基础 su 模型面转换为高精度、符合物理规律的真实材质（PBR）。',
+    ratio: '保持和原图相同的比例。',
+    style: '现代室内设计',
+    location: '中国重庆',
+    time: '早上8点',
+    envlight: '远处外景进入的柔和自然天光，光线细腻有层次。山城特有的雾感天光',
+    volumetric: true,
+    lights: ['天花灯带', '天花射灯', '墙面壁灯', '落地灯', '柜底灯带'],
+    lightqual: '电影级布光，柔和漫反射，真实阴影层次，高动态光影对比。',
+    camera: '尼康 Z9（Nikon Z9）',
+    aperture: 'f/8',
+    shutter: '1s',
+    tech: ['高动态范围（HDR）拍摄，包围曝光，确保暗部不失真、亮部不过曝。'],
+    res: '超高分辨率（8K）',
+    render: '写实室内摄影，质感通透，细节丰富，电影级后期调色。'
+  },
+  nordic: {
+    project_name: 'SU截图转写实摄影 - 北欧简约风',
+    scene_type: '室内空间',
+    geo: '严格保持原始 su 场景结构、物体位置和几何形状，严禁改变空间布局。',
+    obj: '保留主要家具结构，允许增加软装配饰。',
+    convert: '将 su 模型转换为写实渲染，注重光影和材质质感。',
+    ratio: '保持和原图相同的比例。',
+    style: '北欧极简室内设计',
+    location: '北欧斯堪的纳维亚',
+    time: '上午10点',
+    envlight: '柔和漫射的阴天散射光，无明显阴影，细节均匀。',
+    volumetric: false,
+    lights: [],
+    lightqual: '自然光为主，最少人工干预，追求真实感。',
+    camera: '索尼 A7R V（Sony A7RV）',
+    aperture: 'f/5.6',
+    shutter: '1/60s',
+    tech: ['三脚架固定长曝光，提升室内暗光细节。'],
+    res: '超高分辨率（4K）',
+    render: '北欧白净风格，高亮度，低饱和，纯净通透。'
+  },
+  luxury: {
+    project_name: 'SU截图转写实摄影 - 轻奢风格定制',
+    scene_type: '室内空间',
+    geo: '严格保持原始 su 场景结构、物体位置和几何形状，严禁改变空间布局。',
+    obj: '保持所有家具、灯具和装饰品的原始样式与比例。',
+    convert: '转换为高精度电影级写实画面，全面升级材质细节。',
+    ratio: '16:9 宽幅横构图，适合效果图展示。',
+    style: '轻奢现代室内设计',
+    location: '中国上海',
+    time: '傍晚18点',
+    envlight: '蓝调时刻（Blue Hour）柔和蓝紫色天光，色温约4000-5000K，室内外冷暖光线交融，形成独特的静谧氛围。',
+    volumetric: true,
+    lights: ['天花灯带', '天花吊灯', '墙面壁灯', '墙面洗墙灯', '窗帘盒灯带', '柜体灯带朝上', '柜体灯带朝下', '落地灯', '台灯'],
+    lightqual: '电影级布光，柔和漫反射，真实阴影层次，高动态光影对比。',
+    camera: '哈苏 X2D（Hasselblad X2D）',
+    aperture: 'f/8',
+    shutter: '1s',
+    tech: ['高动态范围（HDR）拍摄，包围曝光，确保暗部不失真、亮部不过曝。', '移轴镜头拍摄，校正透视畸变，保证垂直线条平行。'],
+    res: '超高分辨率（8K）',
+    render: '暖调奶油色系，柔和质感，温馨氛围。'
+  },
+  industrial: {
+    project_name: 'SU截图转写实摄影 - 工业风格',
+    scene_type: '商业空间',
+    geo: '基本保持几何结构，允许细节优化和局部调整。',
+    obj: '保持所有家具、灯具和装饰品的原始样式与比例。',
+    convert: '将基础 su 模型面转换为高精度、符合物理规律的真实材质（PBR）。',
+    ratio: '保持和原图相同的比例。',
+    style: '工业风室内设计',
+    location: '中国北京',
+    time: '夜晚21点',
+    envlight: '夜晚纯人工照明，无自然光介入。',
+    volumetric: true,
+    lights: ['天花射灯', '磁吸轨道灯', '墙面壁灯', '落地灯', '柜底灯带'],
+    lightqual: '商业摄影布光，高对比，强调产品质感。',
+    camera: '佳能 EOS R5 C（Canon EOS R5C）',
+    aperture: 'f/8',
+    shutter: '1/60s',
+    tech: ['高动态范围（HDR）拍摄，包围曝光，确保暗部不失真、亮部不过曝。'],
+    res: '超高分辨率（4K）',
+    render: '高对比强饱和，杂志级商业效果图风格。'
+  },
+  // New presets based on style groups
+  xz: {
+    project_name: 'SU截图转写实摄影 - 新中式风格',
+    scene_type: '室内空间',
+    geo: '严格保持原始 su 场景结构、物体位置和几何形状，严禁改变空间布局。',
+    obj: '保持所有家具、灯具和装饰品的原始样式与比例。',
+    convert: '将基础 su 模型面转换为高精度、符合物理规律的真实材质（PBR）。',
+    ratio: '保持和原图相同的比例。',
+    style: '新中式室内设计',
+    location: '中国北京',
+    time: '上午10点',
+    envlight: '柔和漫射的阴天散射光，无明显阴影，细节均匀。',
+    indoorlight: '嵌入式灯带+主灯混合照明，层次丰富。',
+    lightqual: '建筑效果图标准布光，清晰真实，专业表达。',
+    camera: '哈苏 X2D（Hasselblad X2D）',
+    aperture: 'f/8',
+    shutter: '1s',
+    tech: ['高动态范围（HDR）拍摄，包围曝光，确保暗部不失真、亮部不过曝。'],
+    res: '超高分辨率（8K）',
+    render: '暖调奶油色系，柔和质感，温馨氛围。'
+  },
+  french: {
+    project_name: 'SU截图转写实摄影 - 法式风格',
+    scene_type: '室内空间',
+    geo: '严格保持原始 su 场景结构、物体位置和几何形状，严禁改变空间布局。',
+    obj: '保持所有家具、灯具和装饰品的原始样式与比例。',
+    convert: '转换为高精度电影级写实画面，全面升级材质细节。',
+    ratio: '保持和原图相同的比例。',
+    style: '法式古典室内设计',
+    location: '中国上海',
+    time: '黄金时刻日落前一小时',
+    envlight: '黄金时刻暖色调斜射阳光，长影，浓郁氛围感。',
+    indoorlight: '所有室内人工暖光源开启，形成丰富的立体照明效果（体积光）。',
+    lightqual: '电影级布光，柔和漫反射，真实阴影层次，高动态光影对比。',
+    camera: '徕卡 M11（Leica M11）',
+    aperture: 'f/5.6',
+    shutter: '1/60s',
+    tech: ['高动态范围（HDR）拍摄，包围曝光，确保暗部不失真、亮部不过曝。', '移轴镜头拍摄，校正透视畸变，保证垂直线条平行。'],
+    res: '超高分辨率（8K）',
+    render: '暖调奶油色系，柔和质感，温馨氛围。'
+  }
+};
+
+// ── INIT ──
+let currentLayer = 0;
+
+function init() {
+  applyDataToUI();
+  updateJSON();
+  
+  // Initialize exterior row visibility based on scene_type
+  const exteriorRow = document.getElementById('exterior_row');
+  if (exteriorRow) {
+    exteriorRow.style.display = (data.scene_type === '景观' || data.scene_type === '建筑外观') ? 'flex' : 'none';
+  }
+}
+
+function applyDataToUI() {
+  // Text input
+  document.getElementById('f_project_name').value = data.project_name;
+
+  // Single-select tags
+  const singleFields = [
+    ['scene_type','scene_type'], ['geo','geo'], ['obj','obj'],
+    ['convert','convert'], ['ratio','ratio'],
+    ['location','location'], ['time','time'],
+    ['envlight','envlight'], ['lightqual','lightqual'],
+    ['camera','camera'], ['aperture','aperture'], ['shutter','shutter'],
+    ['res','res'], ['render','render'], ['exterior','exterior']
+  ];
+
+  singleFields.forEach(([dataKey, tagGroup]) => {
+    const container = document.getElementById('tags_' + tagGroup);
+    if (!container) return;
+    const val = data[dataKey];
+    container.querySelectorAll('.tag').forEach(t => {
+      t.classList.toggle('selected', t.dataset.val === val);
+    });
+  });
+
+  // Style is special - search all style tag containers
+  const styleVal = data.style;
+  document.querySelectorAll('[id^="tags_style"]').forEach(container => {
+    container.querySelectorAll('.tag').forEach(t => {
+      t.classList.toggle('selected', t.dataset.val === styleVal);
+    });
+  });
+
+  // Volumetric toggle
+  const volContainer = document.getElementById('tags_volumetric');
+  if (volContainer) {
+    volContainer.querySelectorAll('.tag').forEach(t => {
+      t.classList.toggle('selected', data.volumetric);
+    });
+  }
+
+  // Lights multi-select
+  const lightCategories = ['ceiling', 'wall', 'cabinet', 'local'];
+  lightCategories.forEach(cat => {
+    const container = document.getElementById('tags_lights_' + cat);
+    if (container) {
+      container.querySelectorAll('.tag').forEach(t => {
+        t.classList.toggle('multi-selected', data.lights.includes(t.dataset.val));
+      });
+    }
+  });
+
+  // Multi-select tags
+  const container = document.getElementById('tags_tech');
+  if (container) {
+    container.querySelectorAll('.tag').forEach(t => {
+      t.classList.toggle('multi-selected', data.tech.includes(t.dataset.val));
+    });
+  }
+}
+
+// ── TAG SELECTION ──
+function selectTag(el, group) {
+  // Check if clicking the already selected tag - if so, deselect it
+  if (el.classList.contains('selected')) {
+    el.classList.remove('selected');
+    const keyMap = {
+      scene_type: 'scene_type', geo: 'geo', obj: 'obj',
+      convert: 'convert', ratio: 'ratio',
+      style: 'style', location: 'location', time: 'time',
+      envlight: 'envlight', lightqual: 'lightqual',
+      camera: 'camera', aperture: 'aperture', shutter: 'shutter',
+      res: 'res', render: 'render', exterior: 'exterior'
+    };
+    if (keyMap[group]) data[keyMap[group]] = '';
+    updateJSON();
+    return;
+  }
+  
+  const container = el.closest('.tags');
+  container.querySelectorAll('.tag').forEach(t => t.classList.remove('selected'));
+  el.classList.add('selected');
+
+  const keyMap = {
+    scene_type: 'scene_type', geo: 'geo', obj: 'obj',
+    convert: 'convert', ratio: 'ratio',
+    style: 'style', location: 'location', time: 'time',
+    envlight: 'envlight', lightqual: 'lightqual',
+    camera: 'camera', aperture: 'aperture', shutter: 'shutter',
+    res: 'res', render: 'render', exterior: 'exterior'
+  };
+  if (keyMap[group]) data[keyMap[group]] = el.dataset.val;
+  
+  // Show/hide exterior row based on scene_type
+  if (group === 'scene_type') {
+    const exteriorRow = document.getElementById('exterior_row');
+    if (exteriorRow) {
+      exteriorRow.style.display = (el.dataset.val === '景观' || el.dataset.val === '建筑外观') ? 'flex' : 'none';
+    }
+  }
+  
+  updateJSON();
+}
+
+function selectMultiTag(el, group) {
+  // Check if clicking the already selected tag - if so, just toggle (deselect)
+  el.classList.toggle('multi-selected');
+  if (group === 'lights') {
+    const lightCategories = ['ceiling', 'wall', 'cabinet', 'local'];
+    data.lights = [];
+    lightCategories.forEach(cat => {
+      const container = document.getElementById('tags_lights_' + cat);
+      if (container) {
+        container.querySelectorAll('.tag.multi-selected').forEach(t => {
+          data.lights.push(t.dataset.val);
+        });
+      }
+    });
+  } else if (group === 'tech') {
+    const container = document.getElementById('tags_tech');
+    if (container) {
+      data.tech = [];
+      container.querySelectorAll('.tag.multi-selected').forEach(t => {
+        data.tech.push(t.dataset.val);
+      });
+    }
+  }
+  updateJSON();
+}
+
+// Toggle volumetric light
+function toggleVolumetric(el) {
+  el.classList.toggle('selected');
+  data.volumetric = el.classList.contains('selected');
+  updateJSON();
+}
+
+// Light preset selection
+function selectLightPreset(presetName) {
+  const preset = lightPresets[presetName];
+  if (!preset) return;
+  
+  data.lights = [...preset];
+  
+  // Update UI selections
+  document.querySelectorAll('[id^="tags_lights_"]').forEach(container => {
+    if (!container.dataset.multi) return;
+    container.querySelectorAll('.tag').forEach(t => {
+      t.classList.toggle('multi-selected', preset.includes(t.dataset.val));
+    });
+  });
+  
+  updateJSON();
+}
+
+// ── JSON BUILD ──
+function buildJSON() {
+  // Build indoor light description from lights selection
+  let indoorLightDesc = '';
+  if (data.lights.length === 0) {
+    indoorLightDesc = '仅自然光，室内人工光全部关闭。';
+  } else {
+    const lightList = data.lights.join('、');
+    if (data.volumetric) {
+      indoorLightDesc = `开启${lightList}，形成丰富的立体照明效果（体积光/丁达尔效应），营造柔和通透的光影氛围。`;
+    } else {
+      indoorLightDesc = `开启${lightList}，营造层次丰富的照明效果。`;
+    }
+  }
+  
+  // Build exterior description
+  let exteriorDesc = '';
+  if (data.exterior && data.exterior !== '无外景') {
+    exteriorDesc = `窗外可见${data.exterior}，增加空间层次感。`;
+  }
+  
+  // Build scene type with exterior
+  let sceneTypeDesc = data.scene_type;
+  if (data.exterior && data.exterior !== '无外景') {
+    sceneTypeDesc = `${data.exterior}${data.scene_type}`;
+  }
+  
+  return {
+    "项目名称": document.getElementById('f_project_name').value || data.project_name,
+    "核心约束": {
+      "空间类型": sceneTypeDesc,
+      "几何保真度": data.geo,
+      "物体完整性": data.obj,
+      "转换逻辑": data.convert,
+      "图像比例": data.ratio
+    },
+    "场景与光效": {
+      "设计风格": data.style,
+      "地点": data.location,
+      "时间": data.time,
+      "环境光": data.envlight,
+      "室内光": indoorLightDesc,
+      "外景": exteriorDesc,
+      "光影品质": data.lightqual
+    },
+    "摄影参数": {
+      "相机型号": data.camera,
+      "光圈": data.aperture,
+      "快门": data.shutter,
+      "拍摄技术": data.tech.join('，')
+    },
+    "渲染精度": {
+      "分辨率": data.res,
+      "画面表现": data.render
+    }
+  };
+}
+
+function updateJSON() {
+  const json = buildJSON();
+  // Use JSON.stringify to format with proper line breaks
+  const text = JSON.stringify(json, null, 2);
+  // Simple syntax highlighting for keys only
+  const escaped = text.replace(/"([^"]+)":/g, '<span class="jk">"$1"</span>:');
+  document.getElementById('jsonPreview').innerHTML = escaped;
+}
+
+// ── SYNTAX HIGHLIGHT ──
+function syntaxHighlight(obj, indent = 0) {
+  const pad = '  '.repeat(indent);
+  const pad1 = '  '.repeat(indent + 1);
+
+  if (typeof obj === 'string') {
+    return `<span class="jv">"${escHtml(obj)}"</span>`;
+  }
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return '<span class="jp">[]</span>';
+    const items = obj.map(v => pad1 + syntaxHighlight(v, indent + 1)).join(',\n');
+    return `<span class="jp">[</span>\n${items}\n${pad}<span class="jp">]</span>`;
+  }
+  if (typeof obj === 'object' && obj !== null) {
+    const entries = Object.entries(obj);
+    if (entries.length === 0) return '<span class="jp">{}</span>';
+    // Each key-value on its own line, no trailing comma
+    const lines = entries.map(([k, v], idx) => {
+      const isLast = idx === entries.length - 1;
+      const comma = isLast ? '' : ',';
+      return `${pad1}<span class="jk">"${escHtml(k)}"</span><span class="jp">: </span>${syntaxHighlight(v, indent + 1)}${comma}`;
+    }).join('\n');
+    return `<span class="jp">{</span>\n${lines}\n${pad}<span class="jp">}</span>`;
+  }
+  return String(obj);
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── COPY ──
+function copyJSON() {
+  const json = buildJSON();
+  const text = JSON.stringify(json, null, 2);
+  navigator.clipboard.writeText(text).then(() => {
+    showToast();
+    const btn = document.getElementById('copyBtn');
+    btn.classList.add('copied');
+    btn.textContent = '✓ 已复制';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = '完整复制 / 当前页面';
+    }, 2000);
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast();
+  });
+}
+
+function showToast() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── PRESETS ──
+function loadPreset(name) {
+  const p = presets[name];
+  if (!p) return;
+  Object.assign(data, p);
+  applyDataToUI();
+  updateJSON();
+
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// ── LAYER NAVIGATION ──
+const layers = document.querySelectorAll('.layer-card');
+
+function scrollToLayer(idx) {
+  currentLayer = idx;
+  layers[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+  updateDots();
+  document.getElementById('pageIndicator').textContent =
+    String(idx + 1).padStart(2, '0') + ' / 05';
+}
+
+function scrollLayer(dir) {
+  const next = Math.max(0, Math.min(4, currentLayer + dir));
+  scrollToLayer(next);
+}
+
+function updateDots() {
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.classList.toggle('active', i === currentLayer);
+  });
+}
+
+// Track scroll to update dots
+document.querySelector('.right-panel').addEventListener('scroll', function() {
+  const panelTop = this.getBoundingClientRect().top;
+  let closest = 0;
+  let minDist = Infinity;
+  layers.forEach((l, i) => {
+    const dist = Math.abs(l.getBoundingClientRect().top - panelTop);
+    if (dist < minDist) { minDist = dist; closest = i; }
+  });
+  if (closest !== currentLayer) {
+    currentLayer = closest;
+    updateDots();
+    document.getElementById('pageIndicator').textContent =
+      String(currentLayer + 1).padStart(2, '0') + ' / 05';
+  }
+});
+
+// Keyboard nav
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); scrollLayer(1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); scrollLayer(-1); }
+});
+
+// ── START ──
+init();
+</script>
+</body>
+</html>
